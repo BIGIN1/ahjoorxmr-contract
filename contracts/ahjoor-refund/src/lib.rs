@@ -70,6 +70,8 @@ pub enum RefundStatus {
     Cancelled = 5,
     /// Merchant has made a counter-offer; awaiting customer response
     CounterOffered = 6,
+    /// #245: Merchant approved a partial amount; funds transferred; no further action possible.
+    PartiallyApproved = 7,
 }
 
 #[contracttype]
@@ -2888,6 +2890,77 @@ impl AhjoorRefundContract {
             PERSISTENT_LIFETIME_THRESHOLD,
             PERSISTENT_BUMP_AMOUNT,
         );
+    }
+
+    // --- Issue #245: Partial Refund Approval ---
+
+    /// Merchant approves a partial amount (0 < approved_amount < requested_amount).
+    /// Transfers approved_amount to customer immediately; status set to PartiallyApproved.
+    /// Only valid while refund is in Requested state.
+    pub fn partial_approve_refund(
+        env: Env,
+        merchant: Address,
+        refund_id: u32,
+        approved_amount: i128,
+    ) {
+        Self::require_not_paused(&env);
+        merchant.require_auth();
+
+        let mut refund: Refund = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Refund(refund_id))
+            .expect("Refund not found");
+
+        if refund.merchant != merchant {
+            panic!("Only the refund merchant can partially approve");
+        }
+        if refund.status != RefundStatus::Requested {
+            panic!("Refund is not in Requested state");
+        }
+        if approved_amount <= 0 {
+            panic!("approved_amount must be positive");
+        }
+        if approved_amount >= refund.amount {
+            panic!("Use approve_refund for full amount; approved_amount must be less than requested");
+        }
+
+        let client = token::Client::new(&env, &refund.token);
+        client.transfer(
+            &env.current_contract_address(),
+            &refund.customer,
+            &approved_amount,
+        );
+
+        let remaining = refund.amount - approved_amount;
+        let now = env.ledger().timestamp();
+        refund.status = RefundStatus::PartiallyApproved;
+        refund.approved_at = Some(now);
+        refund.processed_at = Some(now);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Refund(refund_id), &refund);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Refund(refund_id),
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+
+        // Remove from pending queue
+        Self::remove_from_pending_queue(&env, refund_id);
+
+        events::emit_refund_partially_approved(
+            &env,
+            refund_id,
+            merchant,
+            approved_amount,
+            refund.amount,
+            remaining,
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     }
 }
 
