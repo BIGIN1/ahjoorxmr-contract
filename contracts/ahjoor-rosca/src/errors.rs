@@ -95,6 +95,12 @@ pub enum Error {
     InvalidEmergencyConfig = 61,
     /// Invalid dissolution configuration.
     InvalidDissolutionConfig = 62,
+    /// Only admin is allowed to perform this action.
+    OnlyAdminAllowed = 63,
+    /// Invalid amount provided.
+    InvalidAmount = 64,
+    /// Round duration is out of the configured bounds.
+    RoundDurationOutOfBounds = 65,
 }
 
 /// Extension error codes 51-56 — split from Error because #[contracterror]
