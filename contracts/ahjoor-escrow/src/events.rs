@@ -786,4 +786,18 @@ pub fn emit_cancellation_rejected(e: &Env, escrow_id: u32, rejector: Address) {
 }
 pub fn emit_cancellation_expired(e: &Env, escrow_id: u32) {
     e.events().publish((Symbol::new(e, "CancelExpired"),), (escrow_id,));
+// #225: Escrow Top-Up Event
+
+/// Event: Buyer topped up an active escrow with additional funds
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct EscrowToppedUp {
+    pub escrow_id: u32,
+    pub added_amount: i128,
+    pub new_total: i128,
+    pub buyer: Address,
+}
+
+pub fn emit_escrow_topped_up(e: &Env, escrow_id: u32, added_amount: i128, new_total: i128, buyer: Address) {
+    EscrowToppedUp { escrow_id, added_amount, new_total, buyer }.publish(e);
 }

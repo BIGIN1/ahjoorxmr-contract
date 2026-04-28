@@ -9,6 +9,13 @@ pub struct RoscaInitialized {
     pub contribution_amount: i128,
 }
 
+/// Event: Group activated after delayed start
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct GroupActivated {
+    pub start_at: u64,
+}
+
 /// Event: Contribution received
 #[contractevent]
 #[derive(Clone, Debug)]
@@ -371,6 +378,10 @@ pub fn emit_rosc_init(e: &Env, member_count: u32, contribution_amount: i128) {
         contribution_amount,
     }
     .publish(e);
+}
+
+pub fn emit_group_activated(e: &Env, start_at: u64) {
+    GroupActivated { start_at }.publish(e);
 }
 
 pub fn emit_round_deadline_timestamp_set(e: &Env, round: u32, timestamp: u64) {
@@ -843,6 +854,25 @@ pub fn emit_retention_window_updated(e: &Env, old_window: u32, new_window: u32) 
     RetentionWindowUpdated { old_window, new_window }.publish(e);
 }
 
+pub fn emit_waitlist_updated(e: &Env, member: Address, joined: bool, size: u32) {
+    e.events()
+        .publish((Symbol::new(e, "WaitlistUpd"),), (member, joined, size));
+}
+
+pub fn emit_member_enrolled_from_waitlist(
+    e: &Env,
+    member: Address,
+    vacated_by: Address,
+    round: u32,
+    catch_up_amount: i128,
+) {
+    e.events()
+        .publish(
+            (Symbol::new(e, "WaitEnroll"),),
+            (member, vacated_by, round, catch_up_amount),
+        );
+}
+
 // --- Emergency Payout Events ---
 
 /// Event: Emergency payout requested
@@ -1060,4 +1090,67 @@ pub fn emit_merge_completed(e: &Env, proposal_id: u32, members_added: u32) {
 }
 pub fn emit_group_marked_merged(e: &Env, group_b_id: u32) {
     e.events().publish((Symbol::new(e, "GroupMerged"),), (group_b_id,));
+// #224: Cycle Completion Bonus Events
+
+/// Event: Cycle bonus amount configured by admin
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct CycleBonusConfigured {
+    pub amount: i128,
+}
+
+/// Event: Cycle bonus paid to a qualifying member
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct CycleBonusPaid {
+    pub member: Address,
+    pub amount: i128,
+    pub cycle: u32,
+}
+
+/// Event: Cycle bonus prorated due to insufficient reward pool
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct CycleBonusProrated {
+    pub cycle: u32,
+    pub shortfall: i128,
+}
+
+pub fn emit_cycle_bonus_configured(e: &Env, amount: i128) {
+    CycleBonusConfigured { amount }.publish(e);
+}
+
+pub fn emit_cycle_bonus_paid(e: &Env, member: Address, amount: i128, cycle: u32) {
+    CycleBonusPaid { member, amount, cycle }.publish(e);
+}
+
+pub fn emit_cycle_bonus_prorated(e: &Env, cycle: u32, shortfall: i128) {
+    CycleBonusProrated { cycle, shortfall }.publish(e);
+}
+
+// #227: Round Duration Update Events
+
+/// Event: Round duration update scheduled (pending, takes effect next round)
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct RoundDurationUpdateScheduled {
+    pub old_duration: u64,
+    pub new_duration: u64,
+    pub effective_from_round: u32,
+}
+
+/// Event: Pending round duration applied at round start
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct RoundDurationApplied {
+    pub round: u32,
+    pub duration: u64,
+}
+
+pub fn emit_round_duration_update_scheduled(e: &Env, old_duration: u64, new_duration: u64, effective_from_round: u32) {
+    RoundDurationUpdateScheduled { old_duration, new_duration, effective_from_round }.publish(e);
+}
+
+pub fn emit_round_duration_applied(e: &Env, round: u32, duration: u64) {
+    RoundDurationApplied { round, duration }.publish(e);
 }
