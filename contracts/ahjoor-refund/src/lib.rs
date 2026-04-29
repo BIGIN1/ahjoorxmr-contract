@@ -70,6 +70,8 @@ pub enum RefundStatus {
     Cancelled = 5,
     /// Merchant has made a counter-offer; awaiting customer response
     CounterOffered = 6,
+    /// #245: Merchant approved a partial amount; funds transferred; no further action possible.
+    PartiallyApproved = 7,
 }
 
 /// #238: Priority label for refund requests.
@@ -2922,6 +2924,33 @@ impl AhjoorRefundContract {
             .persistent()
             .get(&DataKey::Refund(refund_id))
             .expect("Refund not found");
+
+        if refund.merchant != merchant {
+            panic!("Only the refund merchant can partially approve");
+        }
+        if refund.status != RefundStatus::Requested {
+            panic!("Refund is not in Requested state");
+        }
+        if approved_amount <= 0 {
+            panic!("approved_amount must be positive");
+        }
+        if approved_amount >= refund.amount {
+            panic!("Use approve_refund for full amount; approved_amount must be less than requested");
+        }
+
+        let client = token::Client::new(&env, &refund.token);
+        client.transfer(
+            &env.current_contract_address(),
+            &refund.customer,
+            &approved_amount,
+        );
+
+        let remaining = refund.amount - approved_amount;
+        let now = env.ledger().timestamp();
+        refund.status = RefundStatus::PartiallyApproved;
+        refund.approved_at = Some(now);
+        refund.processed_at = Some(now);
+
         if refund.status != RefundStatus::Requested {
             panic!("Can only set priority on Requested refunds");
         }
