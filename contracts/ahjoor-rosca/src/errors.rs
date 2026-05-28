@@ -168,4 +168,6 @@ pub enum ExtError {
     MigrationAlreadyPending = 94,
     /// Target slot index is already occupied in the destination group.
     SlotOccupied = 95,
+    /// Proxy supplied an amount that does not exactly match required contribution.
+    IncorrectContributionAmount = 85,
 }
